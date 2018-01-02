@@ -48,8 +48,8 @@ public final class ConnectionPool {
    * garbage collected.
    */
   private static final Executor executor = new ThreadPoolExecutor(0 /* corePoolSize */,
-      Integer.MAX_VALUE /* maximumPoolSize */, 60L /* keepAliveTime */, TimeUnit.SECONDS,
-      new SynchronousQueue<Runnable>(), Util.threadFactory("OkHttp ConnectionPool", true));
+          Integer.MAX_VALUE /* maximumPoolSize */, 60L /* keepAliveTime */, TimeUnit.SECONDS,
+          new SynchronousQueue<Runnable>(), Util.threadFactory("OkHttp ConnectionPool", true));
 
   /** The maximum number of idle connections for each address. */
   private final int maxIdleConnections;
@@ -121,12 +121,25 @@ public final class ConnectionPool {
    */
   @Nullable RealConnection get(Address address, StreamAllocation streamAllocation, Route route) {
     assert (Thread.holdsLock(this));
+    // for (RealConnection connection : connections) {
+    //   if (connection.isEligible(address, route)) {
+    //     streamAllocation.acquire(connection, true);
+    //     return connection;
+    //   }
+    // }
+    RealConnection connectionToBeReturned=null;
     for (RealConnection connection : connections) {
       if (connection.isEligible(address, route)) {
-        streamAllocation.acquire(connection, true);
-        return connection;
+        if(connectionToBeReturned==null|| connectionToBeReturned.idleAtNanos>connection.idleAtNanos){
+          connectionToBeReturned=connection;
+        }
       }
     }
+    if(connectionToBeReturned!=null){
+        streamAllocation.acquire(connectionToBeReturned, true);
+        return connectionToBeReturned;
+    }
+
     return null;
   }
 
@@ -138,8 +151,8 @@ public final class ConnectionPool {
     assert (Thread.holdsLock(this));
     for (RealConnection connection : connections) {
       if (connection.isEligible(address, null)
-          && connection.isMultiplexed()
-          && connection != streamAllocation.connection()) {
+              && connection.isMultiplexed()
+              && connection != streamAllocation.connection()) {
         return streamAllocation.releaseAndAcquire(connection);
       }
     }
@@ -224,7 +237,7 @@ public final class ConnectionPool {
       }
 
       if (longestIdleDurationNs >= this.keepAliveDurationNs
-          || idleConnectionCount > this.maxIdleConnections) {
+              || idleConnectionCount > this.maxIdleConnections) {
         // We've found a connection to evict. Remove it from the list, then close it below (outside
         // of the synchronized block).
         connections.remove(longestIdleConnection);
@@ -265,9 +278,9 @@ public final class ConnectionPool {
 
       // We've discovered a leaked allocation. This is an application bug.
       StreamAllocation.StreamAllocationReference streamAllocRef =
-          (StreamAllocation.StreamAllocationReference) reference;
+              (StreamAllocation.StreamAllocationReference) reference;
       String message = "A connection to " + connection.route().address().url()
-          + " was leaked. Did you forget to close a response body?";
+              + " was leaked. Did you forget to close a response body?";
       Platform.get().logCloseableLeak(message, streamAllocRef.callStackTrace);
 
       references.remove(i);
