@@ -119,16 +119,29 @@ public final class ConnectionPool {
    * Returns a recycled connection to {@code address}, or null if no such connection exists. The
    * route is null if the address has not yet been routed.
    */
-  @Nullable RealConnection get(Address address, StreamAllocation streamAllocation, Route route) {
-    assert (Thread.holdsLock(this));
-    for (RealConnection connection : connections) {
-      if (connection.isEligible(address, route)) {
-        streamAllocation.acquire(connection, true);
-        return connection;
-      }
-    }
-    return null;
-  }
+   @Nullable RealConnection get(Address address, StreamAllocation streamAllocation, Route route) {
+     assert (Thread.holdsLock(this));
+     // for (RealConnection connection : connections) {
+     //   if (connection.isEligible(address, route)) {
+     //     streamAllocation.acquire(connection, true);
+     //     return connection;
+     //   }
+     // }
+     RealConnection connectionToBeReturned=null;
+     for (RealConnection connection : connections) {
+       if (connection.isEligible(address, route)) {
+         if(connectionToBeReturned==null|| connectionToBeReturned.idleAtNanos>connection.idleAtNanos){
+           connectionToBeReturned=connection;
+         }
+       }
+     }
+     if(connectionToBeReturned!=null){
+         streamAllocation.acquire(connectionToBeReturned, true);
+         return connectionToBeReturned;
+     }
+
+     return null;
+   }
 
   /**
    * Replaces the connection held by {@code streamAllocation} with a shared connection if possible.
